@@ -161,7 +161,7 @@ jobs:
             'class MainActivity : AppCompatActivity() {' \
             '    private lateinit var webView: WebView' \
             '' \
-            'override fun onCreate(savedInstanceState: Bundle?) {' \
+            '    override fun onCreate(savedInstanceState: Bundle?) {' \
             '        super.onCreate(savedInstanceState)' \
             '        webView = WebView(this)' \
             '        setContentView(webView)' \
@@ -214,13 +214,26 @@ jobs:
 
           chmod +x gradlew || true
 
-          # Icon Replacement
+          # Guaranteed Icon Generation Logic
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+
+          # Fallback default PNG icon
+          DEFAULT_ICON_B64="iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACOSURBVHgB7c4BDQAACAMg+5fmsR3EwiC3p84iQIACBChAgAIEKECABghQgAAFCECAAgQoQIAGCFCAAAUIUIACBGiAAAUIUIACBChAgAYIUIABBQhQgAIFaIAABQhQgAAFCFCABghQgAIFCFCAAAUoQAMEKECAAgQoQAEKNECAAgQoQIACBOg2MN8BBakxOksAAAAASUVORK5CYII="
+
+          echo "$DEFAULT_ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+          echo "$DEFAULT_ICON_B64" | base64 -d > app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          echo "$DEFAULT_ICON_B64" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+
+          # Override with user custom Base64 Icon if present
           if [ -n "$ICON_B64" ]; then
-            echo "$ICON_B64" | base64 -d > temp_icon.png 2>/dev/null || true
-            if [ -f temp_icon.png ]; then
-              cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png 2>/dev/null || true
-              cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png 2>/dev/null || true
-              cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png 2>/dev/null || true
+            CLEAN_B64=$(echo "$ICON_B64" | sed -e 's/data:image\/[a-zA-Z]*;base64,//g' | tr -d '\r\n ')
+            echo "$CLEAN_B64" | base64 -d > temp_icon.png 2>/dev/null || true
+            if [ -s temp_icon.png ]; then
+              cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+              cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+              cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
               rm -f temp_icon.png
             fi
           fi
