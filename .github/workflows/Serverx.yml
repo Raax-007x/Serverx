@@ -40,6 +40,13 @@ jobs:
 
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
 
+          # Always ensure gradle.properties exists with AndroidX enabled
+          printf '%s\n' \
+          'android.useAndroidX=true' \
+          'android.enableJetifier=true' \
+          'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' \
+          'android.nonTransitiveRclass=true' > gradle.properties
+
           if [ ! -f "app/build.gradle.kts" ]; then
             echo "Base project missing. Generating full source code..."
 
@@ -154,7 +161,7 @@ jobs:
             'class MainActivity : AppCompatActivity() {' \
             '    private lateinit var webView: WebView' \
             '' \
-            '    override fun onCreate(savedInstanceState: Bundle?) {' \
+            'override fun onCreate(savedInstanceState: Bundle?) {' \
             '        super.onCreate(savedInstanceState)' \
             '        webView = WebView(this)' \
             '        setContentView(webView)' \
