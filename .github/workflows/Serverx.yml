@@ -47,161 +47,162 @@ jobs:
 
             # 1. settings.gradle.kts
             cat << 'EOF' > settings.gradle.kts
-            pluginManagement {
-                repositories {
-                    google()
-                    mavenCentral()
-                    gradlePluginPortal()
-                }
-            }
-            dependencyResolutionManagement {
-                repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-                repositories {
-                    google()
-                    mavenCentral()
-                }
-            }
-            rootProject.name = "WebToApk"
-            include(":app")
-            EOF
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "WebToApk"
+include(":app")
+EOF
 
             # 2. Root build.gradle.kts
             cat << 'EOF' > build.gradle.kts
-            plugins {
-                id("com.android.application") version "8.5.2" apply false
-                id("org.jetbrains.kotlin.android") version "1.9.24" apply false
-            }
-            EOF
+plugins {
+    id("com.android.application") version "8.5.2" apply false
+    id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+}
+EOF
 
             # 3. App build.gradle.kts
             cat << EOF > app/build.gradle.kts
-            plugins {
-                id("com.android.application")
-                id("org.jetbrains.kotlin.android")
-            }
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
 
-            android {
-                namespace = "$PACKAGE_NAME"
-                compileSdk = 34
+android {
+    namespace = "$PACKAGE_NAME"
+    compileSdk = 34
 
-                defaultConfig {
-                    applicationId = "$PACKAGE_NAME"
-                    minSdk = 24
-                    targetSdk = 34
-                    versionCode = 1
-                    versionName = "1.0"
-                }
+    defaultConfig {
+        applicationId = "$PACKAGE_NAME"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
+    }
 
-                compileOptions {
-                    sourceCompatibility = JavaVersion.VERSION_17
-                    targetCompatibility = JavaVersion.VERSION_17
-                }
-                kotlinOptions {
-                    jvmTarget = "17"
-                }
-            }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
 
-            dependencies {
-                implementation("androidx.core:core-ktx:1.13.1")
-                implementation("androidx.appcompat:appcompat:1.7.0")
-                implementation("com.google.android.material:material:1.12.0")
-            }
-            EOF
+dependencies {
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("com.google.android.material:material:1.12.0")
+}
+EOF
 
             # 4. AndroidManifest.xml
             cat << EOF > app/src/main/AndroidManifest.xml
-            <?xml version="1.0" encoding="utf-8"?>
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-                <uses-permission android:name="android.permission.INTERNET" />
-                <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-                <application
-                    android:allowBackup="true"
-                    android:icon="@mipmap/ic_launcher"
-                    android:label="@string/app_name"
-                    android:roundIcon="@mipmap/ic_launcher"
-                    android:supportsRtl="true"
-                    android:theme="@style/Theme.AppCompat.NoActionBar"
-                    android:usesCleartextTraffic="true">
-                    <activity
-                        android:name=".MainActivity"
-                        android:exported="true"
-                        android:configChanges="orientation|screenSize|keyboardHidden">
-                        <intent-filter>
-                            <action android:name="android.intent.action.MAIN" />
-                            <category android:name="android.intent.category.LAUNCHER" />
-                        </intent-filter>
-                    </activity>
-                </application>
-            </manifest>
-            EOF
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AppCompat.NoActionBar"
+        android:usesCleartextTraffic="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
 
             # 5. strings.xml
             cat << EOF > app/src/main/res/values/strings.xml
-            <resources>
-                <string name="app_name">$APP_NAME</string>
-            </resources>
-            EOF
+<resources>
+    <string name="app_name">$APP_NAME</string>
+</resources>
+EOF
 
             # 6. MainActivity.kt
             cat << EOF > "app/src/main/java/${PKG_PATH}/MainActivity.kt"
-            package $PACKAGE_NAME
+package $PACKAGE_NAME
 
-            import android.os.Bundle
-            import android.webkit.WebSettings
-            import android.webkit.WebView
-            import android.webkit.WebViewClient
-            import androidx.appcompat.app.AppCompatActivity
+import android.os.Bundle
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.appcompat.app.AppCompatActivity
 
-            class MainActivity : AppCompatActivity() {
-                private lateinit var webView: WebView
+class MainActivity : AppCompatActivity() {
+    private lateinit var webView: WebView
 
-                override fun onCreate(savedInstanceState: Bundle?) {
-                    super.onCreate(savedInstanceState)
-                    
-                    webView = WebView(this)
-                    setContentView(webView)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        webView = WebView(this)
+        setContentView(webView)
 
-                    webView.settings.apply {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-                        databaseEnabled = true
-                        useWideViewPort = true
-                        loadWithOverviewMode = true
-                        cacheMode = WebSettings.LOAD_DEFAULT
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                    }
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            useWideViewPort = true
+            loadWithOverviewMode = true
+            cacheMode = WebSettings.LOAD_DEFAULT
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        }
 
-                    webView.webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                            url?.let { view?.loadUrl(it) }
-                            return true
-                        }
-                    }
-
-                    webView.loadUrl("$APP_URL")
-                }
-
-                override fun onBackPressed() {
-                    if (::webView.isInitialized && webView.canGoBack()) {
-                        webView.goBack()
-                    } else {
-                        super.onBackPressed()
-                    }
-                }
+        webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                url?.let { view?.loadUrl(it) }
+                return true
             }
-            EOF
+        }
 
-            # Generate Gradle Wrapper Files
+        webView.loadUrl("$APP_URL")
+    }
+
+    override fun onBackPressed() {
+        if (::webView.isInitialized && webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
+        }
+    }
+}
+EOF
+
+            # Generate Gradle Wrapper Files & make executable
             gradle wrapper --gradle-version 8.7
+            chmod +x gradlew
 
             # AUTO-COMMIT & PUSH SOURCE FILES BACK TO GITHUB REPO
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git add .
             git commit -m "Auto-generated Base Android Project files" || true
-            git push origin HEAD:${{ github.ref_name }} || true
+            git push origin HEAD || true
 
           else
             echo "Base project already exists in repo! Updating dynamic values..."
@@ -210,12 +211,16 @@ jobs:
             find app/src/main/java -name "MainActivity.kt" -exec sed -i "s|loadUrl(\".*\")|loadUrl(\"$APP_URL\")|g" {} +
           fi
 
+          # Make sure gradlew is executable
+          chmod +x gradlew || true
+
           # Icon Replacement
           if [ -n "$ICON_B64" ]; then
             echo "$ICON_B64" | base64 -d > temp_icon.png
             cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png 2>/dev/null || true
             cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png 2>/dev/null || true
             cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png 2>/dev/null || true
+            rm -f temp_icon.png
           fi
 
       - name: 5. Build Debug APK
