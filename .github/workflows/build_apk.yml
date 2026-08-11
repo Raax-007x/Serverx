@@ -1,36 +1,19 @@
-name: Online Mide Fast Realtime Builder
+name: Online Mide Fast Compiler
 
 on:
-  repository_dispatch:
-    types: [build-apk]
   workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'App Name'
-        required: false
-        default: 'Online Mide'
-      package_name:
-        description: 'Package Name'
-        required: false
-        default: 'com.mide.myapp'
-      main_dart:
-        description: 'Base64 main.dart'
-        required: false
-        default: ''
-      pubspec_yaml:
-        description: 'Base64 pubspec.yaml'
-        required: false
-        default: ''
+  push:
+    branches: [ main ]
 
 permissions:
   contents: write
 
 jobs:
-  fast-build:
+  build-apk:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Checkout Repository
+      - name: 1. Checkout Committed Code
         uses: actions/checkout@v4
 
       - name: 2. Setup Java JDK 17
@@ -39,72 +22,29 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Setup Flutter SDK
+      - name: 3. Setup Flutter SDK (Cached for Speed)
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.x'
           channel: 'stable'
           cache: true
 
-      - name: 4. Clean Slate Workspace & Generate Flutter Template
-        run: |
-          # Purge legacy/conflicting files
-          rm -rf app/ android/ build/ .gradle/ .dart_tool/ settings.gradle* build.gradle* gradle*
-          
-          # 🟢 CRITICAL FIX: Pass valid lowercase --project-name serverx to avoid "Serverx" Capital S error
-          flutter create . --template=app --platforms=android --project-name serverx --overwrite
-
-      - name: 5. ⚡ Python Realtime Code & Config Injector
-        env:
-          MAIN_DART_B64: ${{ github.event.client_payload.main_dart || github.event.inputs.main_dart }}
-          PUBSPEC_B64: ${{ github.event.client_payload.pubspec_yaml || github.event.inputs.pubspec_yaml }}
-          APP_NAME: ${{ github.event.client_payload.app_name || github.event.inputs.app_name }}
-          PACKAGE_NAME: ${{ github.event.client_payload.package_name || github.event.inputs.package_name }}
-        run: |
-          python3 -c "
-          import os, base64
-
-          main_b64 = os.environ.get('MAIN_DART_B64', '')
-          pubspec_b64 = os.environ.get('PUBSPEC_B64', '')
-
-          if main_b64.strip():
-              print('Injecting Realtime main.dart...')
-              os.makedirs('lib', exist_ok=True)
-              with open('lib/main.dart', 'wb') as f:
-                  f.write(base64.b64decode(main_b64.strip()))
-
-          if pubspec_b64.strip():
-              print('Injecting Realtime pubspec.yaml...')
-              with open('pubspec.yaml', 'wb') as f:
-                  f.write(base64.b64decode(pubspec_b64.strip()))
-          "
-
-          # Inject App Name & Package Name
-          if [ -n "$APP_NAME" ] && [ -f "android/app/src/main/AndroidManifest.xml" ]; then
-            sed -i "s/android:label=\".*\"/android:label=\"$APP_NAME\"/g" android/app/src/main/AndroidManifest.xml || true
-          fi
-
-          if [ -n "$PACKAGE_NAME" ] && [ -f "android/app/build.gradle" ]; then
-            sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/g" android/app/build.gradle || true
-            sed -i "s/namespace \".*\"/namespace \"$PACKAGE_NAME\"/g" android/app/build.gradle || true
-          fi
-
-      - name: 6. Fast Compile ARM64 Release APK
+      - name: 4. Build ARM64 Release APK
         run: |
           flutter pub get
           flutter build apk --target-platform android-arm64 --release
 
-      - name: 7. Prepare Binary Asset
+      - name: 5. Prepare Binary Output
         run: |
           RAW_APK=$(find build/app/outputs/flutter-apk/ -name "*.apk" | grep -v "unaligned" | head -n 1)
           mkdir -p release_out
           cp "$RAW_APK" release_out/OnlineMide-Release.apk
 
-      - name: 8. Publish Asset to GitHub Release
+      - name: 6. Publish to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest
-          name: "Online Mide Latest Build"
+          name: "Online Mide Latest Release"
           files: release_out/OnlineMide-Release.apk
           overwrite: true
         env:
