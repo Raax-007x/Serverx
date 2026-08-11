@@ -1,0 +1,67 @@
+name: Build Flutter APK Cloud Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'App Display Name'
+        required: true
+        default: 'Online Mide'
+      package_name:
+        description: 'Android Package ID'
+        required: true
+        default: 'com.mide.app'
+      main_dart:
+        description: 'Base64 encoded main.dart'
+        required: true
+      pubspec_yaml:
+        description: 'Base64 encoded pubspec.yaml'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚀 Step 1: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🧠 Step 2: Validate & Prepare Environment
+        run: |
+          # Create lib directory if missing
+          mkdir -p lib
+          # Basic validation: check if inputs are empty
+          if [ -z "${{ github.event.inputs.main_dart }}" ]; then echo "Error: main.dart is empty!"; exit 1; fi
+          echo "Environment Ready!"
+
+      - name: ⚙️ Step 3: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.x'
+          channel: 'stable'
+
+      - name: 📝 Step 4: Inject & Fix Code
+        run: |
+          # Decode and Overwrite files
+          echo "${{ github.event.inputs.main_dart }}" | base64 -d > lib/main.dart
+          echo "${{ github.event.inputs.pubspec_yaml }}" | base64 -d > pubspec.yaml
+          
+          # Auto-fix Manifest and Gradle placeholders if template has them
+          sed -i 's/android:label=".*"/android:label="${{ github.event.inputs.app_name }}"/' android/app/src/main/AndroidManifest.xml || echo "Manifest not found, skipping..."
+
+      - name: 📦 Step 5: Get Dependencies
+        run: flutter pub get
+
+      - name: 🏗️ Step 6: Build APK
+        run: |
+          # Clean and build
+          flutter clean
+          flutter build apk --release --split-per-abi
+
+      - name: 🚀 Step 7: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          name: "Latest Build - ${{ github.run_id }}"
+          files: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
