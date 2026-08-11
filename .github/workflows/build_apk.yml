@@ -1,4 +1,4 @@
-name: Web-To-APK & Flutter Cloud Builder
+name: Online Mide Flutter Cloud Builder
 
 on:
   repository_dispatch:
@@ -21,14 +21,6 @@ on:
         description: 'Base64 encoded pubspec.yaml'
         required: false
         default: ''
-      app_url:
-        description: 'Web URL for Web-To-APK'
-        required: false
-        default: ''
-      icon_b64:
-        description: 'Base64 App Icon'
-        required: false
-        default: ''
       bot_token:
         description: 'Telegram Bot Token'
         required: false
@@ -46,7 +38,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-flutter:
     runs-on: ubuntu-latest
 
     steps:
@@ -64,7 +56,7 @@ jobs:
           if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide"; fi
 
           if [ -n "$MSG_ID" ] && [ -n "$BOT_TOKEN" ]; then
-            TEXT="⚙️ <b>[Step 1/3] Setting up Cloud Environment...</b>%0A%0A📱 <b>App Name:</b> $APP_NAME%0A⏳ <i>Preparing Java & Flutter Workspace...</i>"
+            TEXT="⚙️ <b>[Step 1/3] Setting up Flutter Environment...</b>%0A%0A📱 <b>App Name:</b> $APP_NAME%0A⏳ <i>Preparing Java JDK & Flutter SDK...</i>"
             curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
                  -d "chat_id=$CHAT_ID" -d "message_id=$MSG_ID" -d "text=$TEXT" -d "parse_mode=HTML" || true
           fi
@@ -75,52 +67,45 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 4. Determine Build Mode (Flutter vs Web-To-APK)
-        id: mode_check
-        run: |
-          MAIN_DART="${{ github.event.client_payload.main_dart || github.event.inputs.main_dart }}"
-          
-          if [ -n "$MAIN_DART" ]; then
-            echo "BUILD_MODE=flutter" >> $GITHUB_ENV
-            echo "Mode: Flutter IDE Cloud Build"
-          else
-            echo "BUILD_MODE=web_to_apk" >> $GITHUB_ENV
-            echo "Mode: Web-To-APK Native Generator"
-          fi
-
-      # ==================== FLUTTER ENGINE (Auto-Repairs Gradle) ====================
-      - name: 5a. Setup Flutter SDK
-        if: env.BUILD_MODE == 'flutter'
+      - name: 4. Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.x'
           channel: 'stable'
 
-      - name: 5b. Generate/Fix Flutter Template & Inject Code
-        if: env.BUILD_MODE == 'flutter'
+      - name: 5. Auto-Fix Gradle & Setup Clean Flutter Project
         run: |
-          MAIN_DART="${{ github.event.client_payload.main_dart || github.event.inputs.main_dart }}"
-          PUBSPEC_YAML="${{ github.event.client_payload.pubspec_yaml || github.event.inputs.pubspec_yaml }}"
           APP_NAME="${{ github.event.client_payload.app_name || github.event.inputs.app_name }}"
           PACKAGE_NAME="${{ github.event.client_payload.package_name || github.event.inputs.package_name }}"
+          MAIN_DART="${{ github.event.client_payload.main_dart || github.event.inputs.main_dart }}"
+          PUBSPEC_YAML="${{ github.event.client_payload.pubspec_yaml || github.event.inputs.pubspec_yaml }}"
 
           if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide App"; fi
           if [ -z "$PACKAGE_NAME" ]; then PACKAGE_NAME="com.mide.myapp"; fi
 
-          # 🚀 FIX: Re-create fresh, supported Flutter Android structure automatically
-          echo "Generating supported Flutter Android project structure..."
-          flutter create . --overwrite --platforms=android --org "${PACKAGE_NAME%.*}" || true
+          # 🧹 CRITICAL FIX: Purane Native Android/Webview files ko delete karke conflict remove karna
+          rm -rf app/ settings.gradle.kts build.gradle.kts
 
-          # Inject Code
+          # 🚀 Create fresh Flutter Android template structure
+          echo "Generating fresh supported Flutter project structure..."
+          flutter create . --overwrite --platforms=android --org "${PACKAGE_NAME%.*}" --project-name "mide_app"
+
+          # Inject User Code
           mkdir -p lib
-          echo "$MAIN_DART" | base64 -d > lib/main.dart
-          echo "$PUBSPEC_YAML" | base64 -d > pubspec.yaml
+          if [ -n "$MAIN_DART" ]; then
+            echo "$MAIN_DART" | base64 -d > lib/main.dart
+          fi
 
-          # Update App Name & Package Name
+          if [ -n "$PUBSPEC_YAML" ]; then
+            echo "$PUBSPEC_YAML" | base64 -d > pubspec.yaml
+          fi
+
+          # Update App Name in AndroidManifest
           if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
             sed -i "s/android:label=\".*\"/android:label=\"$APP_NAME\"/" android/app/src/main/AndroidManifest.xml || true
           fi
 
+          # Update Package Name in build.gradle / build.gradle.kts
           if [ -f "android/app/build.gradle" ]; then
             sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" android/app/build.gradle || true
             sed -i "s/namespace \".*\"/namespace \"$PACKAGE_NAME\"/" android/app/build.gradle || true
@@ -131,111 +116,7 @@ jobs:
             sed -i "s/namespace = \".*\"/namespace = \"$PACKAGE_NAME\"/" android/app/build.gradle.kts || true
           fi
 
-      # ==================== WEB-TO-APK ENGINE ====================
-      - name: 6a. Generate Native Web-To-APK Code
-        if: env.BUILD_MODE == 'web_to_apk'
-        run: |
-          APP_NAME="${{ github.event.client_payload.app_name || github.event.inputs.app_name }}"
-          PACKAGE_NAME="${{ github.event.client_payload.package_name || github.event.inputs.package_name }}"
-          APP_URL="${{ github.event.client_payload.app_url || github.event.inputs.app_url }}"
-          ICON_B64="${{ github.event.client_payload.icon_b64 || github.event.inputs.icon_b64 }}"
-
-          if [ -z "$PACKAGE_NAME" ]; then PACKAGE_NAME="com.soo.app"; fi
-          if [ -z "$APP_NAME" ]; then APP_NAME="Soo"; fi
-          if [ -z "$APP_URL" ]; then APP_URL="https://google.com"; fi
-
-          PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
-
-          printf '%s\n' \
-          'android.useAndroidX=true' \
-          'android.enableJetifier=true' \
-          'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' \
-          'android.nonTransitiveRclass=true' > gradle.properties
-
-          mkdir -p "app/src/main/java/${PKG_PATH}"
-          mkdir -p "app/src/main/res/values"
-          mkdir -p "app/src/main/res/mipmap-hdpi"
-          mkdir -p "app/src/main/res/mipmap-xhdpi"
-          mkdir -p "app/src/main/res/mipmap-xxhdpi"
-
-          printf '%s\n' \
-          'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }' \
-          'dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }' \
-          'rootProject.name = "WebToApk"' \
-          'include(":app")' > settings.gradle.kts
-
-          printf '%s\n' \
-          'plugins { id("com.android.application") version "8.5.2" apply false; id("org.jetbrains.kotlin.android") version "1.9.24" apply false }' > build.gradle.kts
-
-          printf '%s\n' \
-          'plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }' \
-          'android {' \
-          "    namespace = \"$PACKAGE_NAME\"" \
-          '    compileSdk = 34' \
-          '    defaultConfig {' \
-          "        applicationId = \"$PACKAGE_NAME\"" \
-          '        minSdk = 24' \
-          '        targetSdk = 34' \
-          '        versionCode = 1' \
-          '        versionName = "1.0"' \
-          '    }' \
-          '    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }' \
-          '    kotlinOptions { jvmTarget = "17" }' \
-          '}' \
-          'configurations.all { resolutionStrategy { force("androidx.core:core:1.13.1"); force("androidx.core:core-ktx:1.13.1"); force("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7") } }' \
-          'dependencies { implementation("androidx.core:core-ktx:1.13.1"); implementation("androidx.appcompat:appcompat:1.7.0"); implementation("com.google.android.material:material:1.12.0") }' > app/build.gradle.kts
-
-          printf '%s\n' \
-          '<?xml version="1.0" encoding="utf-8"?>' \
-          '<manifest xmlns:android="http://schemas.android.com/apk/res/android">' \
-          '    <uses-permission android:name="android.permission.INTERNET" />' \
-          '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' \
-          '    <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="@string/app_name" android:roundIcon="@mipmap/ic_launcher" android:supportsRtl="true" android:theme="@style/Theme.AppCompat.NoActionBar" android:usesCleartextTraffic="true">' \
-          '        <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden">' \
-          '            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>' \
-          '        </activity>' \
-          '    </application>' \
-          '</manifest>' > app/src/main/AndroidManifest.xml
-
-          printf '%s\n' '<resources>' "    <string name=\"app_name\">$APP_NAME</string>" '</resources>' > app/src/main/res/values/strings.xml
-
-          printf '%s\n' \
-          "package $PACKAGE_NAME" '' \
-          'import android.os.Bundle' 'import android.webkit.WebSettings' 'import android.webkit.WebView' 'import android.webkit.WebViewClient' 'import androidx.appcompat.app.AppCompatActivity' '' \
-          'class MainActivity : AppCompatActivity() {' \
-          '    private lateinit var webView: WebView' '' \
-          '    override fun onCreate(savedInstanceState: Bundle?) {' \
-          '        super.onCreate(savedInstanceState)' \
-          '        webView = WebView(this)' \
-          '        setContentView(webView)' \
-          '        webView.settings.apply { javaScriptEnabled = true; domStorageEnabled = true; databaseEnabled = true; useWideViewPort = true; loadWithOverviewMode = true; cacheMode = WebSettings.LOAD_DEFAULT; mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW }' \
-          '        webView.webViewClient = object : WebViewClient() { override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean { url?.let { view?.loadUrl(it) }; return true } }' \
-          "        webView.loadUrl(\"$APP_URL\")" \
-          '    }' \
-          '    override fun onBackPressed() { if (::webView.isInitialized && webView.canGoBack()) { webView.goBack() } else { super.onBackPressed() } }' \
-          '}' > "app/src/main/java/${PKG_PATH}/MainActivity.kt"
-
-          gradle wrapper --gradle-version 8.7
-          chmod +x gradlew
-
-          DEFAULT_ICON_B64="iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACOSURBVHgB7c4BDQAACAMg+5fmsR3EwiC3p84iQIACBChAgAIEKECABghQgAAFCECAAgQoQIAGCFCAAAUIUIACBGiAAAUIUIACBChAgAYIUIABBQhQgAIFaIAABQhQgAAFCFCABghQgAIFCFCAAAUoQAMEKECAAgQoQAEKNECAAgQoQIACBOg2MN8BBakxOksAAAAASUVORK5CYII="
-          echo "$DEFAULT_ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-          echo "$DEFAULT_ICON_B64" | base64 -d > app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          echo "$DEFAULT_ICON_B64" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-
-          if [ -n "$ICON_B64" ]; then
-            CLEAN_B64=$(echo "$ICON_B64" | sed -e 's/data:image\/[a-zA-Z]*;base64,//g' | tr -d '\r\n ')
-            echo "$CLEAN_B64" | base64 -d > temp_icon.png 2>/dev/null || true
-            if [ -s temp_icon.png ]; then
-              cp temp_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-              cp temp_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-              cp temp_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-              rm -f temp_icon.png
-            fi
-          fi
-
-      # ==================== COMPILATION STEP ====================
-      - name: 7. Telegram Progress -> Step 2/3
+      - name: 6. Telegram Progress -> Step 2/3 (Building APK)
         run: |
           CHAT_ID="${{ github.event.client_payload.chat_id || github.event.inputs.chat_id }}"
           MSG_ID="${{ github.event.client_payload.msg_id || github.event.inputs.msg_id }}"
@@ -244,30 +125,24 @@ jobs:
           if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide"; fi
 
           if [ -n "$MSG_ID" ] && [ -n "$BOT_TOKEN" ]; then
-            TEXT="🔨 <b>[Step 2/3] Compiling Release APK...</b>%0A%0A📱 <b>App Name:</b> $APP_NAME%0A⏳ <i>Building APK bytecode (1-2 Min)...</i>"
+            TEXT="🔨 <b>[Step 2/3] Compiling Flutter Release APK...</b>%0A%0A📱 <b>App Name:</b> $APP_NAME%0A⏳ <i>Running Flutter Pub Get & Building ARM64 APK (1-2 Min)...</i>"
             curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
                  -d "chat_id=$CHAT_ID" -d "message_id=$MSG_ID" -d "text=$TEXT" -d "parse_mode=HTML" || true
           fi
 
-      - name: 8a. Build Flutter Release APK
-        if: env.BUILD_MODE == 'flutter'
+      - name: 7. Build Flutter Release APK
         run: |
           flutter pub get
           flutter build apk --release --split-per-abi
 
-      - name: 8b. Build Native Android APK
-        if: env.BUILD_MODE == 'web_to_apk'
-        run: ./gradlew assembleDebug --stacktrace
-
-      # ==================== DELIVERY & RELEASE STEP ====================
-      - name: 9. Locate Compiled APK
+      - name: 8. Locate Compiled Release APK
         id: find_apk
         run: |
-          APK_PATH=$(find . -name "*.apk" | grep -v "unaligned" | head -n 1)
+          APK_PATH=$(find build/app/outputs/flutter-apk/ -name "*arm64-v8a*.apk" -o -name "*release*.apk" | head -n 1)
           echo "APK_FILE=$APK_PATH" >> $GITHUB_ENV
-          echo "Found APK at: $APK_PATH"
+          echo "Compiled Flutter APK path: $APK_PATH"
 
-      - name: 10. Publish APK to GitHub Release (For App Direct Download)
+      - name: 9. Publish APK to GitHub Release (Direct Download link for Mobile App)
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest
@@ -276,7 +151,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 11. Telegram Delivery & DB Sync
+      - name: 10. Telegram Delivery & DB Sync
         if: success()
         run: |
           CHAT_ID="${{ github.event.client_payload.chat_id || github.event.inputs.chat_id }}"
@@ -291,7 +166,7 @@ jobs:
           APK_PATH="${{ env.APK_FILE }}"
 
           if [ -n "$BOT_TOKEN" ] && [ -n "$CHAT_ID" ] && [ -f "$APK_PATH" ]; then
-            CAPTION="✅ <b>Your Custom APK is Ready!</b>%0A%0A📱 <b>App Name:</b> $APP_NAME%0A📦 <b>Package:</b> <code>$PACKAGE_NAME</code>"
+            CAPTION="✅ <b>Your Flutter APK is Ready!</b>%0A%0A📱 <b>App Name:</b> $APP_NAME%0A📦 <b>Package:</b> <code>$PACKAGE_NAME</code>"
 
             RESPONSE=$(curl -s -F chat_id="$CHAT_ID" \
                  -F document=@"$APK_PATH" \
@@ -310,13 +185,13 @@ jobs:
             fi
 
             if [ -n "$MSG_ID" ]; then
-              TEXT="✅ <b>APK Generated & Delivered Successfully!</b>%0A%0A📱 <b>Name:</b> $APP_NAME%0A📦 <b>Package:</b> <code>$PACKAGE_NAME</code>"
+              TEXT="✅ <b>Flutter APK Generated & Delivered Successfully!</b>%0A%0A📱 <b>Name:</b> $APP_NAME%0A📦 <b>Package:</b> <code>$PACKAGE_NAME</code>"
               curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
                    -d "chat_id=$CHAT_ID" -d "message_id=$MSG_ID" -d "text=$TEXT" -d "parse_mode=HTML" || true
             fi
           fi
 
-      - name: 12. Send Failure Alert
+      - name: 11. Send Failure Alert
         if: failure()
         run: |
           CHAT_ID="${{ github.event.client_payload.chat_id || github.event.inputs.chat_id }}"
@@ -326,7 +201,7 @@ jobs:
           if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide"; fi
 
           if [ -n "$MSG_ID" ] && [ -n "$BOT_TOKEN" ]; then
-            TEXT="❌ <b>Build Failed!</b>%0A%0ACompilation process for <b>$APP_NAME</b> failed on GitHub runner."
+            TEXT="❌ <b>Build Failed!</b>%0A%0ACompilation process for <b>$APP_NAME</b> failed on Flutter runner."
             curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
                  -d "chat_id=$CHAT_ID" -d "message_id=$MSG_ID" -d "text=$TEXT" -d "parse_mode=HTML" || true
           fi
