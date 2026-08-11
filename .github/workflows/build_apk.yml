@@ -46,12 +46,15 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: 4. Clean Slate Workspace
+      - name: 4. Clean Slate Workspace & Generate Flutter Template
         run: |
+          # Purge legacy/conflicting files
           rm -rf app/ android/ build/ .gradle/ .dart_tool/ settings.gradle* build.gradle* gradle*
-          flutter create . --template=app --platforms=android --overwrite
+          
+          # 🟢 CRITICAL FIX: Pass valid lowercase --project-name serverx to avoid "Serverx" Capital S error
+          flutter create . --template=app --platforms=android --project-name serverx --overwrite
 
-      - name: 5. ⚡ Python Realtime Code & Config Injector (100% Accurate)
+      - name: 5. ⚡ Python Realtime Code & Config Injector
         env:
           MAIN_DART_B64: ${{ github.event.client_payload.main_dart || github.event.inputs.main_dart }}
           PUBSPEC_B64: ${{ github.event.client_payload.pubspec_yaml || github.event.inputs.pubspec_yaml }}
