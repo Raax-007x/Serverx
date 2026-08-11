@@ -4,7 +4,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
         android:allowBackup="true"
-        android:label="Don"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Solid"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true">
         <meta-data
