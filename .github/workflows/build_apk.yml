@@ -29,18 +29,46 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: 4. Build ARM64 Release APK
+      - name: 4. 🛡️ Fix Project Root & Enforce Flutter V2 Embedding
+        run: |
+          # 1. Backup user's committed main.dart & pubspec.yaml
+          mkdir -p /tmp/user_code
+          if [ -f "lib/main.dart" ]; then cp lib/main.dart /tmp/user_code/main.dart; fi
+          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml /tmp/user_code/pubspec.yaml; fi
+
+          # 2. Re-generate valid Flutter project structure (Fixes Root Directory & V1 Embedding Error)
+          flutter create . --template=app --platforms=android --project-name serverx --overwrite
+
+          # 3. Restore user's real-time committed code
+          if [ -f "/tmp/user_code/main.dart" ]; then
+            mkdir -p lib
+            cp /tmp/user_code/main.dart lib/main.dart
+            echo "✅ Successfully restored user main.dart"
+          fi
+
+          if [ -f "/tmp/user_code/pubspec.yaml" ]; then
+            cp /tmp/user_code/pubspec.yaml pubspec.yaml
+            echo "✅ Successfully restored user pubspec.yaml"
+          fi
+
+          # 4. Enforce Flutter V2 Embedding in AndroidManifest.xml
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if ! grep -q "flutterEmbedding" "$MANIFEST"; then
+            sed -i '/<\/application>/i \        <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
+          fi
+
+      - name: 5. Fast Compile ARM64 Release APK
         run: |
           flutter pub get
           flutter build apk --target-platform android-arm64 --release
 
-      - name: 5. Prepare Binary Output
+      - name: 6. Prepare Binary Output
         run: |
           RAW_APK=$(find build/app/outputs/flutter-apk/ -name "*.apk" | grep -v "unaligned" | head -n 1)
           mkdir -p release_out
           cp "$RAW_APK" release_out/OnlineMide-Release.apk
 
-      - name: 6. Publish to GitHub Release
+      - name: 7. Publish to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest
