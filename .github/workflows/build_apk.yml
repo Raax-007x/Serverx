@@ -1,4 +1,4 @@
-name: Online Mide Fast Compiler
+name: Online Mide Repo Compiler
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Checkout Committed Code
+      - name: 1. Checkout Committed Repo Code
         uses: actions/checkout@v4
 
       - name: 2. Setup Java JDK 17
@@ -22,38 +22,47 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Setup Flutter SDK (Cached for Speed)
+      - name: 3. Setup Flutter SDK (Cached)
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.x'
           channel: 'stable'
           cache: true
 
-      - name: 4. 🛡️ Fix Project Root & Enforce Flutter V2 Embedding
+      - name: 4. 🛡️ Backup User Repo Files & Fix Root Structure
         run: |
-          # 1. Backup user's committed main.dart & pubspec.yaml
-          mkdir -p /tmp/user_code
-          if [ -f "lib/main.dart" ]; then cp lib/main.dart /tmp/user_code/main.dart; fi
-          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml /tmp/user_code/pubspec.yaml; fi
+          # 🟢 Step A: Backup all committed user files from repo
+          mkdir -p /tmp/user_repo_backup
+          if [ -d "lib" ]; then cp -r lib /tmp/user_repo_backup/; fi
+          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml /tmp/user_repo_backup/; fi
+          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+            mkdir -p /tmp/user_repo_backup/android
+            cp android/app/src/main/AndroidManifest.xml /tmp/user_repo_backup/android/
+          fi
 
-          # 2. Re-generate valid Flutter project structure (Fixes Root Directory & V1 Embedding Error)
+          # 🟢 Step B: Re-generate Flutter Android project wrapper
           flutter create . --template=app --platforms=android --project-name serverx --overwrite
 
-          # 3. Restore user's real-time committed code
-          if [ -f "/tmp/user_code/main.dart" ]; then
-            mkdir -p lib
-            cp /tmp/user_code/main.dart lib/main.dart
-            echo "✅ Successfully restored user main.dart"
+          # 🟢 Step C: Restore EXACT User Repo Code (Overwrites any default template)
+          if [ -d "/tmp/user_repo_backup/lib" ]; then
+            rm -rf lib
+            cp -r /tmp/user_repo_backup/lib lib
+            echo "✅ Successfully restored entire lib/ directory from Repo!"
           fi
 
-          if [ -f "/tmp/user_code/pubspec.yaml" ]; then
-            cp /tmp/user_code/pubspec.yaml pubspec.yaml
-            echo "✅ Successfully restored user pubspec.yaml"
+          if [ -f "/tmp/user_repo_backup/pubspec.yaml" ]; then
+            cp /tmp/user_repo_backup/pubspec.yaml pubspec.yaml
+            echo "✅ Successfully restored user pubspec.yaml from Repo!"
           fi
 
-          # 4. Enforce Flutter V2 Embedding in AndroidManifest.xml
+          if [ -f "/tmp/user_repo_backup/android/AndroidManifest.xml" ]; then
+            cp /tmp/user_repo_backup/android/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+            echo "✅ Successfully restored AndroidManifest.xml from Repo!"
+          fi
+
+          # Enforce Flutter V2 Embedding
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if ! grep -q "flutterEmbedding" "$MANIFEST"; then
+          if [ -f "$MANIFEST" ] && ! grep -q "flutterEmbedding" "$MANIFEST"; then
             sed -i '/<\/application>/i \        <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
           fi
 
@@ -68,7 +77,7 @@ jobs:
           mkdir -p release_out
           cp "$RAW_APK" release_out/OnlineMide-Release.apk
 
-      - name: 7. Publish to GitHub Release
+      - name: 7. Publish Asset to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest
