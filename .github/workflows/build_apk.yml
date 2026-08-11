@@ -1,4 +1,4 @@
-name: Online Mide Flutter Cloud Builder
+name: Online Mide Bulletproof Flutter Engine
 
 on:
   repository_dispatch:
@@ -38,7 +38,7 @@ permissions:
   contents: write
 
 jobs:
-  build-flutter:
+  build-flutter-apk:
     runs-on: ubuntu-latest
 
     steps:
@@ -47,21 +47,21 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 2. Telegram Progress -> Step 1/3
+      - name: 2. Telegram Progress Notification -> Step 1/3
         run: |
           CHAT_ID="${{ github.event.client_payload.chat_id || github.event.inputs.chat_id }}"
           MSG_ID="${{ github.event.client_payload.msg_id || github.event.inputs.msg_id }}"
           BOT_TOKEN="${{ github.event.client_payload.bot_token || github.event.inputs.bot_token }}"
           APP_NAME="${{ github.event.client_payload.app_name || github.event.inputs.app_name }}"
-          if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide"; fi
+          if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide App"; fi
 
           if [ -n "$MSG_ID" ] && [ -n "$BOT_TOKEN" ]; then
-            TEXT="⚙️ <b>[Step 1/3] Setting up Flutter Environment...</b>%0A%0A📱 <b>App Name:</b> $APP_NAME%0A⏳ <i>Preparing Java JDK & Flutter SDK...</i>"
+            TEXT="⚙️ <b>[Step 1/3] Preparing Clean Workspace...</b>%0A%0A📱 <b>App Name:</b> $APP_NAME%0A⏳ <i>Setting up Java JDK 17 & Flutter 3.22 SDK...</i>"
             curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
                  -d "chat_id=$CHAT_ID" -d "message_id=$MSG_ID" -d "text=$TEXT" -d "parse_mode=HTML" || true
           fi
 
-      - name: 3. Set up Java JDK 17
+      - name: 3. Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
@@ -73,7 +73,7 @@ jobs:
           flutter-version: '3.22.x'
           channel: 'stable'
 
-      - name: 5. Auto-Fix Gradle & Setup Clean Flutter Project
+      - name: 5. 🛡️ Bulletproof Clean Slate & Project Generation
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || github.event.inputs.app_name }}"
           PACKAGE_NAME="${{ github.event.client_payload.package_name || github.event.inputs.package_name }}"
@@ -83,66 +83,68 @@ jobs:
           if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide App"; fi
           if [ -z "$PACKAGE_NAME" ]; then PACKAGE_NAME="com.mide.myapp"; fi
 
-          # 🧹 CRITICAL FIX: Purane Native Android/Webview files ko delete karke conflict remove karna
-          rm -rf app/ settings.gradle.kts build.gradle.kts
+          # 🧹 1. PURGE CONFLICTING FILES (Surgical Clean-up)
+          echo "Purging legacy non-Flutter Gradle and conflict files..."
+          rm -rf app/ android/ build/ .gradle/ .dart_tool/ settings.gradle* build.gradle* gradle*
 
-          # 🚀 Create fresh Flutter Android template structure
-          echo "Generating fresh supported Flutter project structure..."
-          flutter create . --overwrite --platforms=android --org "${PACKAGE_NAME%.*}" --project-name "mide_app"
+          # 🚀 2. CREATE FRESH 100% SUPPORTED FLUTTER PROJECT
+          echo "Rebuilding clean Flutter project template..."
+          flutter create . --template=app --org "${PACKAGE_NAME%.*}" --project-name "mide_app" --overwrite
 
-          # Inject User Code
-          mkdir -p lib
-          if [ -n "$MAIN_DART" ]; then
-            echo "$MAIN_DART" | base64 -d > lib/main.dart
-          fi
-
+          # 📝 3. INJECT USER CODE & DEPENDENCIES
           if [ -n "$PUBSPEC_YAML" ]; then
+            echo "Injecting custom pubspec.yaml..."
             echo "$PUBSPEC_YAML" | base64 -d > pubspec.yaml
           fi
 
-          # Update App Name in AndroidManifest
-          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
-            sed -i "s/android:label=\".*\"/android:label=\"$APP_NAME\"/" android/app/src/main/AndroidManifest.xml || true
+          mkdir -p lib
+          if [ -n "$MAIN_DART" ]; then
+            echo "Injecting custom main.dart..."
+            echo "$MAIN_DART" | base64 -d > lib/main.dart
           fi
 
-          # Update Package Name in build.gradle / build.gradle.kts
+          # 🛠️ 4. UPDATE APP NAME & PACKAGE ID
+          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+            sed -i "s/android:label=\".*\"/android:label=\"$APP_NAME\"/g" android/app/src/main/AndroidManifest.xml || true
+          fi
+
           if [ -f "android/app/build.gradle" ]; then
-            sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/" android/app/build.gradle || true
-            sed -i "s/namespace \".*\"/namespace \"$PACKAGE_NAME\"/" android/app/build.gradle || true
+            sed -i "s/applicationId \".*\"/applicationId \"$PACKAGE_NAME\"/g" android/app/build.gradle || true
+            sed -i "s/namespace \".*\"/namespace \"$PACKAGE_NAME\"/g" android/app/build.gradle || true
           fi
 
           if [ -f "android/app/build.gradle.kts" ]; then
-            sed -i "s/applicationId = \".*\"/applicationId = \"$PACKAGE_NAME\"/" android/app/build.gradle.kts || true
-            sed -i "s/namespace = \".*\"/namespace = \"$PACKAGE_NAME\"/" android/app/build.gradle.kts || true
+            sed -i "s/applicationId = \".*\"/applicationId = \"$PACKAGE_NAME\"/g" android/app/build.gradle.kts || true
+            sed -i "s/namespace = \".*\"/namespace = \"$PACKAGE_NAME\"/g" android/app/build.gradle.kts || true
           fi
 
-      - name: 6. Telegram Progress -> Step 2/3 (Building APK)
+      - name: 6. Telegram Progress Notification -> Step 2/3
         run: |
           CHAT_ID="${{ github.event.client_payload.chat_id || github.event.inputs.chat_id }}"
           MSG_ID="${{ github.event.client_payload.msg_id || github.event.inputs.msg_id }}"
           BOT_TOKEN="${{ github.event.client_payload.bot_token || github.event.inputs.bot_token }}"
           APP_NAME="${{ github.event.client_payload.app_name || github.event.inputs.app_name }}"
-          if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide"; fi
+          if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide App"; fi
 
           if [ -n "$MSG_ID" ] && [ -n "$BOT_TOKEN" ]; then
-            TEXT="🔨 <b>[Step 2/3] Compiling Flutter Release APK...</b>%0A%0A📱 <b>App Name:</b> $APP_NAME%0A⏳ <i>Running Flutter Pub Get & Building ARM64 APK (1-2 Min)...</i>"
+            TEXT="🔨 <b>[Step 2/3] Compiling Release APK...</b>%0A%0A📱 <b>App Name:</b> $APP_NAME%0A⏳ <i>Running Flutter pub get & compiling ARM64 Bytecode...</i>"
             curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
                  -d "chat_id=$CHAT_ID" -d "message_id=$MSG_ID" -d "text=$TEXT" -d "parse_mode=HTML" || true
           fi
 
-      - name: 7. Build Flutter Release APK
+      - name: 7. Build Release APK
         run: |
           flutter pub get
           flutter build apk --release --split-per-abi
 
-      - name: 8. Locate Compiled Release APK
-        id: find_apk
+      - name: 8. Locate Built APK Binary
+        id: locate_apk
         run: |
-          APK_PATH=$(find build/app/outputs/flutter-apk/ -name "*arm64-v8a*.apk" -o -name "*release*.apk" | head -n 1)
+          APK_PATH=$(find build/app/outputs/flutter-apk/ -name "*.apk" | grep -v "unaligned" | head -n 1)
           echo "APK_FILE=$APK_PATH" >> $GITHUB_ENV
-          echo "Compiled Flutter APK path: $APK_PATH"
+          echo "Found binary APK at: $APK_PATH"
 
-      - name: 9. Publish APK to GitHub Release (Direct Download link for Mobile App)
+      - name: 9. Publish Release to GitHub (Direct Download for Android App)
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest
@@ -151,7 +153,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 10. Telegram Delivery & DB Sync
+      - name: 10. Telegram Delivery & DB File Sync
         if: success()
         run: |
           CHAT_ID="${{ github.event.client_payload.chat_id || github.event.inputs.chat_id }}"
@@ -160,7 +162,7 @@ jobs:
           APP_NAME="${{ github.event.client_payload.app_name || github.event.inputs.app_name }}"
           PACKAGE_NAME="${{ github.event.client_payload.package_name || github.event.inputs.package_name }}"
 
-          if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide"; fi
+          if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide App"; fi
           if [ -z "$PACKAGE_NAME" ]; then PACKAGE_NAME="com.mide.myapp"; fi
 
           APK_PATH="${{ env.APK_FILE }}"
@@ -191,14 +193,14 @@ jobs:
             fi
           fi
 
-      - name: 11. Send Failure Alert
+      - name: 11. Send Failure Notification
         if: failure()
         run: |
           CHAT_ID="${{ github.event.client_payload.chat_id || github.event.inputs.chat_id }}"
           MSG_ID="${{ github.event.client_payload.msg_id || github.event.inputs.msg_id }}"
           BOT_TOKEN="${{ github.event.client_payload.bot_token || github.event.inputs.bot_token }}"
           APP_NAME="${{ github.event.client_payload.app_name || github.event.inputs.app_name }}"
-          if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide"; fi
+          if [ -z "$APP_NAME" ]; then APP_NAME="Online Mide App"; fi
 
           if [ -n "$MSG_ID" ] && [ -n "$BOT_TOKEN" ]; then
             TEXT="❌ <b>Build Failed!</b>%0A%0ACompilation process for <b>$APP_NAME</b> failed on Flutter runner."
