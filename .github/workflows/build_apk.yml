@@ -25,46 +25,19 @@ jobs:
       - name: 3. Setup Flutter SDK (Cached)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.x'
           channel: 'stable'
           cache: true
 
-      - name: 4. 🛡️ Backup User Repo Files & Fix Root Structure
+      - name: 4. Ensure Android Build Scaffold
         run: |
-          # 🟢 Step A: Backup all committed user files from repo
-          mkdir -p /tmp/user_repo_backup
-          if [ -d "lib" ]; then cp -r lib /tmp/user_repo_backup/; fi
-          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml /tmp/user_repo_backup/; fi
-          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
-            mkdir -p /tmp/user_repo_backup/android
-            cp android/app/src/main/AndroidManifest.xml /tmp/user_repo_backup/android/
+          # Agar repo me android/ folder nahi hai tabhi wrapper banega
+          if [ ! -d "android" ]; then
+            echo "⚙️ Android folder missing. Generating scaffold..."
+            flutter create . --platforms=android
           fi
-
-          # 🟢 Step B: Re-generate Flutter Android project wrapper
-          flutter create . --template=app --platforms=android --project-name serverx --overwrite
-
-          # 🟢 Step C: Restore EXACT User Repo Code (Overwrites any default template)
-          if [ -d "/tmp/user_repo_backup/lib" ]; then
-            rm -rf lib
-            cp -r /tmp/user_repo_backup/lib lib
-            echo "✅ Successfully restored entire lib/ directory from Repo!"
-          fi
-
-          if [ -f "/tmp/user_repo_backup/pubspec.yaml" ]; then
-            cp /tmp/user_repo_backup/pubspec.yaml pubspec.yaml
-            echo "✅ Successfully restored user pubspec.yaml from Repo!"
-          fi
-
-          if [ -f "/tmp/user_repo_backup/android/AndroidManifest.xml" ]; then
-            cp /tmp/user_repo_backup/android/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-            echo "✅ Successfully restored AndroidManifest.xml from Repo!"
-          fi
-
-          # Enforce Flutter V2 Embedding
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ] && ! grep -q "flutterEmbedding" "$MANIFEST"; then
-            sed -i '/<\/application>/i \        <meta-data android:name="flutterEmbedding" android:value="2" \/>' "$MANIFEST"
-          fi
+          
+          # Executable permission for Gradle wrapper
+          chmod +x android/gradlew
 
       - name: 5. Fast Compile ARM64 Release APK
         run: |
@@ -73,14 +46,15 @@ jobs:
 
       - name: 6. Prepare Binary Output
         run: |
-          RAW_APK=$(find build/app/outputs/flutter-apk/ -name "*.apk" | grep -v "unaligned" | head -n 1)
           mkdir -p release_out
-          cp "$RAW_APK" release_out/OnlineMide-Release.apk
+          APK_PATH=$(find build/app/outputs/flutter-apk/ -name "*.apk" | grep -v "unaligned" | head -n 1)
+          cp "$APK_PATH" release_out/OnlineMide-Release.apk
+          echo "✅ APK Copied Successfully: release_out/OnlineMide-Release.apk"
 
       - name: 7. Publish Asset to GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
+          tag_name: "latest"
           name: "Online Mide Latest Release"
           files: release_out/OnlineMide-Release.apk
           overwrite: true
