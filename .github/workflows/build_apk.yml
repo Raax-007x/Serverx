@@ -28,16 +28,19 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: 4. Ensure Android Build Scaffold
+      - name: 4. Ensure Android Build Scaffold & Gradle Wrapper
         run: |
-          # Agar repo me android/ folder nahi hai tabhi wrapper banega
-          if [ ! -d "android" ]; then
-            echo "⚙️ Android folder missing. Generating scaffold..."
+          # Check if gradlew file exists, if not generate/repair android scaffold
+          if [ ! -f "android/gradlew" ]; then
+            echo "⚙️ Android gradlew missing. Generating/Repairing scaffold..."
             flutter create . --platforms=android
           fi
           
-          # Executable permission for Gradle wrapper
-          chmod +x android/gradlew
+          # Set permission safely
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+            echo "✅ Granted permissions to android/gradlew"
+          fi
 
       - name: 5. Fast Compile ARM64 Release APK
         run: |
